@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from .. import db as db_mod
 from .. import rag
-from ..analysis import analyze
+from ..analysis import analyze, valuation
 from ..ingest import pipeline
 from .deps import get_db
 
@@ -91,6 +91,24 @@ def delete_company(company_id: int, conn: sqlite3.Connection = Depends(get_db)):
 def company_facts(company_id: int, conn: sqlite3.Connection = Depends(get_db)):
     _company_payload(conn, company_id)
     return rag.fact_context(conn, company_id)
+
+
+@router.get("/companies/{company_id}/valuation")
+def company_valuation(company_id: int, conn: sqlite3.Connection = Depends(get_db)):
+    company = _company_payload(conn, company_id)
+    if not company.get("ticker"):
+        return {"available": False, "reason": "no ticker for this company"}
+    try:
+        quote = valuation.get_quote(conn, company["ticker"])
+    except Exception as e:  # noqa: BLE001 - quote source down is not an error state
+        return {"available": False, "reason": f"quote fetch failed: {e}"}
+    if quote is None:
+        return {"available": False,
+                "reason": f"no quote found for {company['ticker']}"}
+    result = valuation.compute_valuation(conn, company_id, quote)
+    result["available"] = True
+    result["ticker"] = company["ticker"]
+    return result
 
 
 @router.post("/companies/{company_id}/analyze")

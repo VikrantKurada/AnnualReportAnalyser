@@ -4,7 +4,9 @@ import sqlite3
 
 MASK = "••••••••"
 
-DEFAULTS: dict[str, str] = {
+DEFAULTS: dict = {
+    # {"panels": {panel_id: bool}, "custom_charts": [{id,name,chart,unit_group,metrics}]}
+    "dashboard_config": {},
     "llm_provider": "ollama",
     "llm_model": "glm-4.7-flash:latest",
     "embed_provider": "ollama",

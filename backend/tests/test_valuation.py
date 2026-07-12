@@ -1,0 +1,87 @@
+import pytest
+
+from app import db
+from app.analysis import valuation
+
+STOOQ_CSV = ("Symbol,Date,Time,Open,High,Low,Close,Volume\n"
+             "AAPL.US,2026-07-10,22:00:04,250.1,255.9,249.3,252.5,41000000\n")
+
+STOOQ_ND = ("Symbol,Date,Time,Open,High,Low,Close,Volume\n"
+            "ZZZZ.US,N/D,N/D,N/D,N/D,N/D,N/D,N/D\n")
+
+
+def make_conn(tmp_path):
+    conn = db.get_conn(tmp_path / "t.db")
+    db.init_db(conn)
+    return conn
+
+
+def test_get_quote_parses_stooq(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(valuation.web, "fetch_url",
+                        lambda conn_, url, ttl=None, binary=False: STOOQ_CSV)
+    q = valuation.get_quote(conn, "AAPL")
+    assert q["price"] == 252.5
+    assert q["asof"] == "2026-07-10"
+    assert "stooq.com" in q["source_url"]
+
+
+def test_get_quote_handles_unknown_ticker(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(valuation.web, "fetch_url",
+                        lambda conn_, url, ttl=None, binary=False: STOOQ_ND)
+    assert valuation.get_quote(conn, "ZZZZ") is None
+
+
+def seed_facts(conn):
+    cid = db.insert(conn, "companies", {"name": "Acme", "ticker": "ACME",
+                                        "source_mode": "edgar", "status": "ready"})
+    ids = {}
+    rows = [
+        ("revenue", 1000.0), ("net_income", 200.0), ("equity", 500.0),
+        ("eps_diluted", 2.0), ("shares_outstanding", 100.0),
+        ("ebitda", 350.0), ("net_debt", 550.0), ("fcf", 200.0),
+        ("dividends_paid", 40.0), ("buybacks", 60.0),
+    ]
+    for metric, value in rows:
+        ids[metric] = db.insert(conn, "facts", {
+            "company_id": cid, "fiscal_year": 2025, "metric": metric,
+            "value": value, "source_kind": "xbrl"})
+    return cid, ids
+
+
+def test_compute_valuation(tmp_path):
+    conn = make_conn(tmp_path)
+    cid, ids = seed_facts(conn)
+    quote = {"price": 50.0, "asof": "2026-07-10", "source_url": "https://stooq.com/x"}
+    v = valuation.compute_valuation(conn, cid, quote)
+
+    m = {row["metric"]: row for row in v["metrics"]}
+    assert m["market_cap"]["value"] == pytest.approx(5000.0)  # 50 × 100 shares
+    assert m["pe"]["value"] == pytest.approx(25.0)            # 50 / 2 eps
+    assert m["ps"]["value"] == pytest.approx(5.0)             # 5000 / 1000
+    assert m["pb"]["value"] == pytest.approx(10.0)            # 5000 / 500
+    assert m["ev"]["value"] == pytest.approx(5550.0)          # mcap + net debt
+    assert m["ev_ebitda"]["value"] == pytest.approx(5550 / 350)
+    assert m["fcf_yield"]["value"] == pytest.approx(200 / 5000)
+    assert m["dividend_yield"]["value"] == pytest.approx(40 / 5000)
+    assert m["buyback_yield"]["value"] == pytest.approx(60 / 5000)
+    assert ids["revenue"] in m["ps"]["inputs"]
+    assert "formula" in m["pe"]
+    assert v["price"] == 50.0
+    assert v["fiscal_year"] == 2025
+
+
+def test_compute_valuation_missing_facts(tmp_path):
+    conn = make_conn(tmp_path)
+    cid = db.insert(conn, "companies", {"name": "Bare", "ticker": "BARE",
+                                        "source_mode": "edgar"})
+    db.insert(conn, "facts", {"company_id": cid, "fiscal_year": 2025,
+                              "metric": "revenue", "value": 10.0,
+                              "source_kind": "xbrl"})
+    v = valuation.compute_valuation(conn, cid,
+        {"price": 5.0, "asof": "2026-07-10", "source_url": "u"})
+    metrics = {row["metric"] for row in v["metrics"]}
+    # no shares -> no market cap or mcap-derived multiples
+    assert "market_cap" not in metrics
+    assert "ps" not in metrics

@@ -37,6 +37,16 @@ def test_update_settings_ignores_mask_placeholder(tmp_path):
     assert settings.get_setting(conn, "llm_model") == "gpt-x"
 
 
+def test_dashboard_config_roundtrip(tmp_path):
+    conn = make_conn(tmp_path)
+    assert settings.get_setting(conn, "dashboard_config") == {}
+    config = {"panels": {"margins": False},
+              "custom_charts": [{"id": "c1", "name": "My chart", "chart": "line",
+                                 "unit_group": "percent", "metrics": ["roe"]}]}
+    settings.set_setting(conn, "dashboard_config", config)
+    assert settings.get_setting(conn, "dashboard_config") == config
+
+
 def test_token_recording_and_totals(tmp_path):
     conn = make_conn(tmp_path)
     tokens.record_usage(conn, "sess1", "ollama", "glm", 100, 50, "chat")

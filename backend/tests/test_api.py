@@ -156,6 +156,33 @@ def test_trace_endpoint(client):
     assert client.get("/api/trace/bogus/1").status_code == 422
 
 
+def test_valuation_endpoint(client, monkeypatch):
+    from app.analysis import valuation as val_mod
+
+    conn = db.get_conn(client.app.state.db_path)
+    cid = db.insert(conn, "companies", {"name": "Acme", "ticker": "ACME",
+                                        "source_mode": "edgar", "status": "ready"})
+    db.insert(conn, "facts", {"company_id": cid, "fiscal_year": 2025,
+                              "metric": "eps_diluted", "value": 2.0,
+                              "source_kind": "xbrl"})
+    no_ticker = db.insert(conn, "companies", {"name": "NoTick",
+                                              "source_mode": "global"})
+    conn.close()
+
+    monkeypatch.setattr(val_mod.web, "fetch_url",
+                        lambda conn_, url, ttl=None, binary=False:
+                        "Symbol,Date,Time,Open,High,Low,Close,Volume\n"
+                        "ACME.US,2026-07-10,22:00:00,49,51,48,50.0,900\n")
+    v = client.get(f"/api/companies/{cid}/valuation").json()
+    assert v["available"] is True
+    assert v["price"] == 50.0
+    metrics = {m["metric"]: m for m in v["metrics"]}
+    assert metrics["pe"]["value"] == 25.0
+
+    v2 = client.get(f"/api/companies/{no_ticker}/valuation").json()
+    assert v2["available"] is False
+
+
 def test_mcp_server_crud(client):
     r = client.post("/api/mcp/servers", json={"name": "calc", "transport": "stdio"})
     assert r.status_code == 422  # stdio needs a command

@@ -45,13 +45,13 @@ cd frontend; npm install; npm run build; cd ..
 ## Run
 
 ```powershell
-.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --port 8000
+.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --port 3000
 ```
 
-Open http://localhost:8000. All data lands in `data/` (safe to delete for a reset).
+Open http://localhost:3000. All data lands in `data/` (safe to delete for a reset).
 
 For frontend development with hot reload: `cd frontend; npm run dev` (proxies `/api`
-to port 8000).
+to port 3000).
 
 ## Tests
 

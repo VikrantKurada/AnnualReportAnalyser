@@ -1,0 +1,85 @@
+"""Market-data valuation multiples, computed on request (never stored as facts,
+since prices move daily). Quotes come from Stooq's free CSV endpoint through the
+shared web cache; every metric keeps the formula + fact-id + price provenance.
+"""
+import sqlite3
+
+from .. import db, web
+
+QUOTE_URL = "https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=csv"
+QUOTE_TTL = 6 * 3600
+
+
+def get_quote(conn: sqlite3.Connection, ticker: str) -> dict | None:
+    url = QUOTE_URL.format(symbol=f"{ticker.lower()}.us")
+    csv_text = web.fetch_url(conn, url, ttl=QUOTE_TTL)
+    lines = [line for line in csv_text.strip().splitlines() if line]
+    if len(lines) < 2:
+        return None
+    header = lines[0].split(",")
+    row = lines[1].split(",")
+    fields = dict(zip(header, row))
+    try:
+        price = float(fields["Close"])
+    except (KeyError, ValueError):
+        return None
+    return {"price": price, "asof": fields.get("Date", ""), "source_url": url}
+
+
+def compute_valuation(conn: sqlite3.Connection, company_id: int,
+                      quote: dict) -> dict:
+    """Latest-fiscal-year multiples. Metrics whose inputs are missing are
+    simply absent."""
+    rows = db.query(conn,
+        "SELECT id, metric, fiscal_year, value FROM facts"
+        " WHERE company_id = ? AND value IS NOT NULL ORDER BY fiscal_year DESC",
+        (company_id,))
+    price = quote["price"]
+    result = {"price": price, "asof": quote["asof"],
+              "source_url": quote["source_url"], "fiscal_year": None,
+              "metrics": []}
+    if not rows:
+        return result
+
+    latest = rows[0]["fiscal_year"]
+    result["fiscal_year"] = latest
+    facts = {r["metric"]: r for r in rows if r["fiscal_year"] == latest}
+
+    def add(metric, value, formula, inputs):
+        result["metrics"].append({"metric": metric, "value": value,
+                                  "formula": formula,
+                                  "inputs": [f["id"] for f in inputs]})
+
+    shares = facts.get("shares_outstanding") or facts.get("shares_diluted_wa")
+    eps = facts.get("eps_diluted") or facts.get("eps_basic")
+    if eps and eps["value"]:
+        add("pe", price / eps["value"], "price / eps_diluted", [eps])
+
+    mcap = None
+    if shares and shares["value"]:
+        mcap = price * shares["value"]
+        add("market_cap", mcap, f"price × {shares['metric']}", [shares])
+
+    if mcap:
+        for metric, base, formula in [("ps", "revenue", "market_cap / revenue"),
+                                      ("pb", "equity", "market_cap / equity")]:
+            f = facts.get(base)
+            if f and f["value"]:
+                add(metric, mcap / f["value"], formula, [shares, f])
+        for metric, base, formula in [
+                ("fcf_yield", "fcf", "fcf / market_cap"),
+                ("dividend_yield", "dividends_paid", "dividends_paid / market_cap"),
+                ("buyback_yield", "buybacks", "buybacks / market_cap")]:
+            f = facts.get(base)
+            if f is not None:
+                add(metric, f["value"] / mcap, formula, [f, shares])
+
+        net_debt = facts.get("net_debt")
+        ev = mcap + net_debt["value"] if net_debt else None
+        if ev is not None:
+            add("ev", ev, "market_cap + net_debt", [shares, net_debt])
+            ebitda = facts.get("ebitda")
+            if ebitda and ebitda["value"]:
+                add("ev_ebitda", ev / ebitda["value"], "ev / ebitda",
+                    [shares, net_debt, ebitda])
+    return result
