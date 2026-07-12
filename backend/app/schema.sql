@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS companies (
     source_mode TEXT NOT NULL DEFAULT 'edgar',
     exchange TEXT,
     profile_json TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    error TEXT,
     saved INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
