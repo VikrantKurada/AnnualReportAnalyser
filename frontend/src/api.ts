@@ -1,7 +1,9 @@
 import type {
   Analysis, ChatMessage, ChatSession, Company, Comparison, FactPivot,
   McpServer, Persona, Project, ProjectMetric, Settings, TokenReport, Trace,
+  Valuation,
 } from "./types";
+import type { DashboardConfig } from "./metricCatalog";
 
 export interface PersonaPayload {
   name: string;
@@ -60,6 +62,13 @@ export const api = {
     get<{ analysis: Analysis | null }>(
       `/api/companies/${id}/analysis${personaId ? `?persona_id=${personaId}` : ""}`),
   getTrace: (kind: string, id: number) => get<Trace>(`/api/trace/${kind}/${id}`),
+  getValuation: (id: number) => get<Valuation>(`/api/companies/${id}/valuation`),
+  getDashboardConfig: async (): Promise<DashboardConfig> => {
+    const s = await get<Record<string, unknown>>("/api/settings");
+    return (s.dashboard_config as DashboardConfig) ?? {};
+  },
+  putDashboardConfig: (config: DashboardConfig) =>
+    put<Settings>("/api/settings", { dashboard_config: config } as unknown as Settings),
 
   // chat
   createSession: (scope_type: string, scope_id: number, persona_id: number | null) =>

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { api, formatValue } from "../api";
+import type { DashboardConfig } from "../metricCatalog";
+import { PRESET_PANELS, panelEnabled } from "../metricCatalog";
 import type { Analysis, Company, FactPivot, Persona } from "../types";
+import { CustomizePanel } from "./CustomizePanel";
+import { CustomChartPanel, PresetPanel } from "./panels";
 import { RichText, TraceChips } from "./TraceChips";
+
+const WIDE_PANELS = new Set(["headline", "dupont", "valuation"]);
 
 export function DashboardView({ companyId, companies, personas, onSelectCompany }: {
   companyId: number | null;
@@ -18,7 +20,18 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [personaId, setPersonaId] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [config, setConfig] = useState<DashboardConfig>({});
+  const [customizing, setCustomizing] = useState(false);
   const baselineId = useRef<number | null>(null);
+
+  useEffect(() => {
+    api.getDashboardConfig().then(setConfig).catch(() => {});
+  }, []);
+
+  const saveConfig = (next: DashboardConfig) => {
+    setConfig(next);
+    api.putDashboardConfig(next).catch(() => {});
+  };
 
   const load = useCallback(async () => {
     if (!companyId) return;
@@ -100,8 +113,15 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
           <button className="primary" onClick={startAnalysis} disabled={analyzing}>
             {analyzing ? "Analysing…" : analysis ? "Re-run analysis" : "Run analysis"}
           </button>
+          <button onClick={() => setCustomizing(true)}
+            title="Choose panels and build custom charts">Customize</button>
         </div>
       </div>
+
+      {customizing && facts && (
+        <CustomizePanel config={config} facts={facts} onChange={saveConfig}
+          onClose={() => setCustomizing(false)} />
+      )}
 
       {company?.status === "failed" && (
         <div className="card"><p className="error-text">Ingestion failed: {company.error}</p></div>
@@ -167,7 +187,27 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
         </>
       )}
 
-      {facts && facts.metrics.length > 0 && <TrendCharts facts={facts} />}
+      {facts && facts.metrics.length > 0 && (
+        <div className="panel-grid">
+          {PRESET_PANELS.filter((p) => panelEnabled(config, p.id)).map((p) => (
+            <div key={p.id}
+              style={{ gridColumn: WIDE_PANELS.has(p.id) ? "1 / -1" : undefined,
+                minWidth: 0 }}>
+              <PresetPanel spec={p} facts={facts} companyId={companyId} />
+            </div>
+          ))}
+          {(config.custom_charts ?? []).map((c) => (
+            <div key={c.id} style={{ minWidth: 0 }}>
+              <CustomChartPanel chart={c} facts={facts}
+                onDelete={() => saveConfig({
+                  ...config,
+                  custom_charts: (config.custom_charts ?? [])
+                    .filter((x) => x.id !== c.id),
+                })} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {content && !failed && (
         <>
@@ -238,85 +278,6 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
       )}
     </div>
   );
-}
-
-const CHART = {
-  revenue: "#2a78d6",   // series-1 blue
-  netIncome: "#1baf7a", // series-2 aqua (sub-3:1 on light: facts table is the relief)
-  netMargin: "#4a3aa7", // series-5 violet
-  opMargin: "#008300",  // series-4 green
-};
-
-function TrendCharts({ facts }: { facts: FactPivot }) {
-  const years = [...facts.years].sort();
-  const metric = (name: string) => facts.metrics.find((m) => m.metric === name);
-  const val = (name: string, y: number) => metric(name)?.values[String(y)] ?? null;
-
-  const moneyData = years.map((y) => ({
-    year: y,
-    Revenue: val("revenue", y),
-    "Net income": val("net_income", y),
-  })).filter((d) => d.Revenue !== null || d["Net income"] !== null);
-
-  const marginData = years.map((y) => ({
-    year: y,
-    "Net margin": pct(val("net_margin", y)),
-    "Operating margin": pct(val("operating_margin", y)),
-  })).filter((d) => d["Net margin"] !== null || d["Operating margin"] !== null);
-
-  if (moneyData.length === 0 && marginData.length === 0) return null;
-
-  return (
-    <div className="card">
-      <h3>Financial trends</h3>
-      <div className="row" style={{ alignItems: "flex-start" }}>
-        {moneyData.length > 0 && (
-          <div style={{ flex: 1, minWidth: 320, height: 240 }}>
-            <ResponsiveContainer>
-              <BarChart data={moneyData} barGap={2}>
-                <CartesianGrid stroke="#e1e0d9" vertical={false} />
-                <XAxis dataKey="year" stroke="#c3c2b7"
-                  tick={{ fill: "#898781", fontSize: 12 }} />
-                <YAxis stroke="#c3c2b7" tick={{ fill: "#898781", fontSize: 12 }}
-                  tickFormatter={(v: number) => formatValue(v, null)} width={56} />
-                <Tooltip formatter={(v) => formatValue(v as number, null)}
-                  contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Revenue" fill={CHART.revenue}
-                  radius={[4, 4, 0, 0]} maxBarSize={36} />
-                <Bar dataKey="Net income" fill={CHART.netIncome}
-                  radius={[4, 4, 0, 0]} maxBarSize={36} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-        {marginData.length > 0 && (
-          <div style={{ flex: 1, minWidth: 320, height: 240 }}>
-            <ResponsiveContainer>
-              <LineChart data={marginData}>
-                <CartesianGrid stroke="#e1e0d9" vertical={false} />
-                <XAxis dataKey="year" stroke="#c3c2b7"
-                  tick={{ fill: "#898781", fontSize: 12 }} />
-                <YAxis stroke="#c3c2b7" tick={{ fill: "#898781", fontSize: 12 }}
-                  tickFormatter={(v: number) => `${v}%`} width={44} />
-                <Tooltip formatter={(v) => `${(v as number).toFixed(1)}%`}
-                  contentStyle={{ fontSize: 12, borderRadius: 6 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line dataKey="Net margin" stroke={CHART.netMargin} strokeWidth={2}
-                  dot={{ r: 4 }} />
-                <Line dataKey="Operating margin" stroke={CHART.opMargin}
-                  strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function pct(v: number | null): number | null {
-  return v === null ? null : Number((v * 100).toFixed(2));
 }
 
 function FactsTable({ facts }: { facts: FactPivot }) {

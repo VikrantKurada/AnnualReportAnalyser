@@ -157,4 +157,22 @@ export interface Trace {
   [key: string]: unknown;
 }
 
+export interface ValuationMetric {
+  metric: string;
+  value: number;
+  formula: string;
+  inputs: number[];
+}
+
+export interface Valuation {
+  available: boolean;
+  reason?: string;
+  ticker?: string;
+  price?: number;
+  asof?: string;
+  source_url?: string;
+  fiscal_year?: number | null;
+  metrics?: ValuationMetric[];
+}
+
 export type Settings = Record<string, string>;
