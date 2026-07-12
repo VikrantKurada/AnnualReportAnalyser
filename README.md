@@ -11,6 +11,12 @@ text / tables / financial facts, stores everything in a persistent SQLite databa
 metrics on an analyst-grade dashboard with an anchored, tool-using chat panel —
 all on your own machine, with your choice of local or cloud LLMs.
 
+## Demo
+
+▶️ **[Watch the demo on YouTube](https://youtu.be/dcunIGDF1l4)**
+
+[![Annual Report Analyser demo](https://img.youtube.com/vi/dcunIGDF1l4/hqdefault.jpg)](https://youtu.be/dcunIGDF1l4)
+
 ## Features
 
 - **Two ingestion modes** per company: **US-listed** (SEC EDGAR 10-K filings + official
