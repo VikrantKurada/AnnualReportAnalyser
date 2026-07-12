@@ -1,9 +1,15 @@
 # Annual Report Analyser
 
-A local web app that fetches a company's last three annual reports, parses them into
-structured text / tables / financial facts, stores everything in a persistent SQLite
-database (including vector embeddings), runs LLM analysis, and presents the results on
-a dashboard with an anchored chat panel.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776ab.svg)](https://www.python.org/)
+[![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61dafb.svg)](https://react.dev/)
+
+**AI-powered fundamental analysis from primary sources.** A local web app that
+fetches a company's last three annual reports, parses them into structured
+text / tables / financial facts, stores everything in a persistent SQLite database
+(including vector embeddings), runs LLM analysis, and presents ~80 traceable
+metrics on an analyst-grade dashboard with an anchored, tool-using chat panel —
+all on your own machine, with your choice of local or cloud LLMs.
 
 ## Features
 
@@ -11,6 +17,17 @@ a dashboard with an anchored chat panel.
   XBRL financial facts) or **Global best-effort** (web search for annual-report PDFs).
 - **Persistent storage** across sessions in one SQLite file (`data/app.db`): section
   text, extracted tables, financial facts, embeddings, analyses, chats, projects.
+- **Analyst-grade metrics**: ~28 fundamentals extracted per fiscal year plus ~35
+  Python-derived ratios — margins (gross/EBITDA/FCF), returns (ROE/ROA/ROIC),
+  working-capital cycle (DSO/DIO/DPO/CCC), liquidity, leverage, per-share, payout,
+  growth and 3-year CAGR — each with its formula and inputs stored.
+- **Configurable dashboard**: 12 toggleable analyst panels (headline KPIs, income
+  statement, margins, returns, cash flow, liquidity & leverage, working capital,
+  expense structure, per-share, capital returns, growth, DuPont decomposition) plus
+  a custom chart builder; the layout persists in the database.
+- **Valuation panel**: P/E, P/S, P/B, EV/EBITDA, market cap, FCF/dividend/buyback
+  yields from a cached live quote (Yahoo Finance chart API), computed on request with
+  full provenance.
 - **Traceability everywhere**: every number and claim carries a citation chip — click
   it to see the XBRL tag, table cell, formula + inputs, or document excerpt it came
   from. Derived ratios are computed in Python, never by the LLM.
@@ -69,6 +86,22 @@ cd backend; ..\.venv\Scripts\python -m pytest
   URL. Enable the "MCP tools" toggle in chat to expose their tools to the model.
 - **SEC fair-access**: EDGAR requests send a contact User-Agent as SEC requires;
   edit `USER_AGENT` in `backend/app/web.py` to use your own contact address.
+
+## License
+
+Free to use: this project is released under the [MIT License](LICENSE). Use it,
+fork it, build on it — commercially or otherwise — with attribution per the license.
+
+## Acknowledgements
+
+- Built with [Claude](https://claude.com) — this application was designed and
+  implemented with **Anthropic's Claude** (Claude Code, Fable 5 model). Thank you,
+  Anthropic.
+- Financial filings and XBRL company facts from the U.S. SEC's
+  [EDGAR](https://www.sec.gov/cgi-bin/browse-edgar) fair-access APIs.
+- Quotes from Yahoo Finance's public chart API; web search via DuckDuckGo.
+- Not investment advice: this tool summarizes and derives numbers from public
+  filings for research purposes. Verify before acting on anything it produces.
 
 ## Architecture
 
