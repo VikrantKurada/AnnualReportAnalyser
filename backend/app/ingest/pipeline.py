@@ -27,13 +27,20 @@ YEAR_RE = re.compile(r"^(?:FY\s*)?(20\d\d)$", re.IGNORECASE)
 NUM_RE = re.compile(r"^\(?-?[\d,]+(?:\.\d+)?\)?$")
 
 
+def find_or_create_company(conn: sqlite3.Connection, name: str,
+                           source_mode: str) -> int:
+    row = conn.execute(
+        "SELECT id FROM companies WHERE (lower(name) = lower(?) OR lower(ticker) = lower(?))"
+        " AND source_mode = ?", (name, name, source_mode)).fetchone()
+    if row:
+        return row["id"]
+    return db.insert(conn, "companies", {"name": name, "source_mode": source_mode,
+                                         "status": "queued"})
+
+
 def ingest_company(conn: sqlite3.Connection, name: str, source_mode: str,
                    embedder=None, embed_model: str = "") -> int:
-    row = conn.execute(
-        "SELECT id FROM companies WHERE lower(name) = lower(?) AND source_mode = ?",
-        (name, source_mode)).fetchone()
-    company_id = row["id"] if row else db.insert(
-        conn, "companies", {"name": name, "source_mode": source_mode})
+    company_id = find_or_create_company(conn, name, source_mode)
 
     if embedder is None:
         from ..providers import registry
