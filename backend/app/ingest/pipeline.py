@@ -14,13 +14,18 @@ from . import chunking, edgar, global_search, parse_html, parse_pdf
 
 TABLE_METRIC_SYNONYMS = {
     "revenue": ["total revenue", "revenue from operations", "revenue", "total income", "net sales", "sales"],
+    "gross_profit": ["gross profit"],
     "net_income": ["net income", "net profit", "profit for the year", "profit after tax"],
     "operating_income": ["operating income", "operating profit"],
+    "ebitda": ["ebitda"],
     "total_assets": ["total assets"],
     "total_liabilities": ["total liabilities"],
     "equity": ["total equity", "shareholders' equity", "shareholders equity",
                "stockholders equity"],
     "cash": ["cash and cash equivalents"],
+    "operating_cash_flow": ["cash generated from operations",
+                            "net cash from operating activities",
+                            "net cash provided by operating activities"],
 }
 
 YEAR_RE = re.compile(r"^(?:FY\s*)?(20\d\d)$", re.IGNORECASE)

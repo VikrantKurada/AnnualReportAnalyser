@@ -54,6 +54,30 @@ FACTS = {"facts": {"us-gaap": {
         {"fy": 2025, "fp": "FY", "form": "10-K", "val": 7.1, "accn": "a1",
          "start": "2024-09-29", "end": "2025-09-27"},
     ]}},
+    "GrossProfit": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 190000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+    "ResearchAndDevelopmentExpense": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 32000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+    "PaymentsToAcquirePropertyPlantAndEquipment": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 11000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+    "PaymentsForRepurchaseOfCommonStock": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 95000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+    "IncomeTaxExpenseBenefit": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 21000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+    "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 15100, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
 }}}
 
 
@@ -114,3 +138,18 @@ def test_company_facts_mapping(tmp_path, monkeypatch):
     ref = json.loads(by[("revenue", 2025)]["source_ref"])
     assert ref["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
     assert by[("revenue", 2025)]["source_kind"] == "xbrl"
+
+
+def test_company_facts_analyst_metrics(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"companyfacts": FACTS}))
+    facts = edgar.company_facts(conn, "0000320193")
+    by = {(f["metric"], f["fiscal_year"]): f for f in facts}
+
+    assert by[("gross_profit", 2025)]["value"] == 190000
+    assert by[("rnd_expense", 2025)]["value"] == 32000
+    assert by[("capex", 2025)]["value"] == 11000
+    assert by[("buybacks", 2025)]["value"] == 95000
+    assert by[("income_tax", 2025)]["value"] == 21000
+    assert by[("shares_diluted_wa", 2025)]["value"] == 15100
+    assert by[("shares_diluted_wa", 2025)]["unit"] == "shares"
