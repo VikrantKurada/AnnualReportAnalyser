@@ -15,7 +15,7 @@ all on your own machine, with your choice of local or cloud LLMs.
 
 ▶️ **[Watch the demo on YouTube](https://youtu.be/dcunIGDF1l4)**
 
-[![Annual Report Analyser demo](https://img.youtube.com/vi/dcunIGDF1l4/hqdefault.jpg)](https://youtu.be/dcunIGDF1l4)
+[![Annual Report Analyser demo](https://img.youtube.com/vi/dcunIGDF1l4/maxresdefault.jpg)](https://youtu.be/dcunIGDF1l4)
 
 ## Features
 
