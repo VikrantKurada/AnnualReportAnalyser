@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { ChatMessage, Persona } from "../types";
-import { TraceChips } from "./TraceChips";
+import { RichText } from "./TraceChips";
 
 interface Scope { type: "company" | "project"; id: number }
 
@@ -167,14 +167,5 @@ export function ChatPanel({ scope, personas, scopeName }: {
 
 /** Renders message text with [chunk:N]/[fact:N] markers as clickable chips. */
 function MessageBody({ message }: { message: ChatMessage }) {
-  const parts = message.content.split(/(\[(?:chunk|fact):\d+\])/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const m = part.match(/^\[((?:chunk|fact):\d+)\]$/);
-        if (m) return <TraceChips key={i} citations={[m[1]]} />;
-        return <span key={i}>{part}</span>;
-      })}
-    </>
-  );
+  return <RichText text={message.content} />;
 }

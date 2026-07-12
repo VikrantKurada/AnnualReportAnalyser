@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { api, formatValue } from "../api";
 import type { Analysis, Company, FactPivot, Persona } from "../types";
-import { TraceChips } from "./TraceChips";
+import { RichText, TraceChips } from "./TraceChips";
 
 export function DashboardView({ companyId, companies, personas, onSelectCompany }: {
   companyId: number | null;
@@ -135,7 +135,7 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
           {content.executive_summary && (
             <div className="card">
               <h3>Executive summary</h3>
-              <p style={{ margin: 0 }}>{content.executive_summary}</p>
+              <p style={{ margin: 0 }}><RichText text={content.executive_summary} /></p>
               {analysis && (
                 <p className="muted small" style={{ margin: "8px 0 0" }}>
                   {analysis.model ?? analysis.provider} · {analysis.created_at}
@@ -149,7 +149,7 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
           {content.business_overview && (
             <div className="card">
               <h3>Business overview</h3>
-              <p style={{ margin: 0 }}>{content.business_overview}</p>
+              <p style={{ margin: 0 }}><RichText text={content.business_overview} /></p>
             </div>
           )}
           {content.financial_highlights && content.financial_highlights.length > 0 && (
@@ -158,7 +158,7 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {content.financial_highlights.map((h, i) => (
                   <li key={i} style={{ marginBottom: 6 }}>
-                    {h.statement} <TraceChips citations={h.citations} />
+                    <RichText text={h.statement} /> <TraceChips citations={h.citations} />
                   </li>
                 ))}
               </ul>
@@ -191,7 +191,7 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {content.risks.map((r, i) => (
                   <li key={i} style={{ marginBottom: 6 }}>
-                    <strong>{r.title}.</strong> {r.summary}{" "}
+                    <strong>{r.title}.</strong> <RichText text={r.summary} />{" "}
                     <TraceChips citations={r.citations} />
                   </li>
                 ))}
@@ -201,7 +201,7 @@ export function DashboardView({ companyId, companies, personas, onSelectCompany 
           {content.outlook && (
             <div className="card">
               <h3>Outlook</h3>
-              <p style={{ margin: 0 }}>{content.outlook}</p>
+              <p style={{ margin: 0 }}><RichText text={content.outlook} /></p>
             </div>
           )}
         </>

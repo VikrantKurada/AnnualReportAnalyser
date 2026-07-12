@@ -28,6 +28,24 @@ export function TraceChips({ citations }: { citations: string[] | undefined }) {
   );
 }
 
+/** Prose with inline [chunk:N] / [fact:N, chunk:M] markers rendered as chips. */
+export function RichText({ text }: { text: string | undefined }) {
+  if (!text) return null;
+  const parts = text.split(/(\[(?:chunk|fact):\d+(?:\s*,\s*(?:chunk|fact):\d+)*\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const m = part.match(/^\[((?:chunk|fact):\d+(?:\s*,\s*(?:chunk|fact):\d+)*)\]$/);
+        if (m) {
+          const cites = m[1].split(",").map((c) => c.trim());
+          return <TraceChips key={i} citations={cites} />;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 export function TraceModal({ trace, onClose }: { trace: Trace; onClose: () => void }) {
   const detail = (trace.detail ?? {}) as Record<string, unknown>;
   const inputs = trace.inputs as
