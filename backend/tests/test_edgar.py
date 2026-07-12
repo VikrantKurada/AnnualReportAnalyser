@@ -1,0 +1,116 @@
+import json
+
+from app import db
+from app.ingest import edgar
+
+TICKERS = {
+    "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
+    "1": {"cik_str": 789019, "ticker": "MSFT", "title": "Microsoft Corp"},
+    "2": {"cik_str": 1318605, "ticker": "TSLA", "title": "Tesla, Inc."},
+}
+
+SUBMISSIONS = {
+    "cik": "320193",
+    "name": "Apple Inc.",
+    "filings": {"recent": {
+        "form": ["10-Q", "10-K", "8-K", "10-K", "10-K", "10-K"],
+        "accessionNumber": ["0000-25-1", "0000320193-25-000123", "0000-25-2",
+                            "0000320193-24-000123", "0000320193-23-000106",
+                            "0000320193-22-000108"],
+        "primaryDocument": ["q.htm", "aapl-20250927.htm", "k.htm",
+                            "aapl-20240928.htm", "aapl-20230930.htm",
+                            "aapl-20220924.htm"],
+        "reportDate": ["2025-06-28", "2025-09-27", "2025-10-01",
+                       "2024-09-28", "2023-09-30", "2022-09-24"],
+        "filingDate": ["2025-07-30", "2025-11-01", "2025-10-02",
+                       "2024-11-01", "2023-11-03", "2022-10-28"],
+    }},
+}
+
+FACTS = {"facts": {"us-gaap": {
+    "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 400000, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 391000, "accn": "a1",
+         "start": "2023-10-01", "end": "2024-09-28"},
+        # quarterly datapoint mislabelled FY must be excluded (short duration)
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 94900, "accn": "a1",
+         "start": "2025-06-29", "end": "2025-09-27"},
+    ]}},
+    "Revenues": {"units": {"USD": [
+        # lower priority tag for same year must not override
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 999999, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+        {"fy": 2023, "fp": "FY", "form": "10-K", "val": 383000, "accn": "a0",
+         "start": "2022-09-25", "end": "2023-09-30"},
+    ]}},
+    "Assets": {"units": {"USD": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 365000, "accn": "a1",
+         "end": "2025-09-27"},
+        {"fy": 2025, "fp": "FY", "form": "10-Q", "val": 1, "accn": "aq",
+         "end": "2025-06-28"},
+    ]}},
+    "EarningsPerShareDiluted": {"units": {"USD/shares": [
+        {"fy": 2025, "fp": "FY", "form": "10-K", "val": 7.1, "accn": "a1",
+         "start": "2024-09-29", "end": "2025-09-27"},
+    ]}},
+}}}
+
+
+def make_conn(tmp_path):
+    conn = db.get_conn(tmp_path / "t.db")
+    db.init_db(conn)
+    return conn
+
+
+def fake_fetch(responses):
+    def _fetch(conn, url, ttl=None, binary=False):
+        for frag, payload in responses.items():
+            if frag in url:
+                return json.dumps(payload)
+        raise AssertionError(f"unexpected url {url}")
+    return _fetch
+
+
+def test_resolve_by_ticker(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"company_tickers": TICKERS}))
+    r = edgar.resolve_company(conn, "aapl")
+    assert r["match"]["cik"] == "0000320193"
+    assert r["match"]["name"] == "Apple Inc."
+
+
+def test_resolve_by_name_substring(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"company_tickers": TICKERS}))
+    r = edgar.resolve_company(conn, "tesla")
+    assert r["match"]["ticker"] == "TSLA"
+    r2 = edgar.resolve_company(conn, "zzz nonexistent")
+    assert r2["match"] is None
+
+
+def test_list_annual_filings(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"submissions": SUBMISSIONS}))
+    filings = edgar.list_annual_filings(conn, "0000320193", n=3)
+    assert [f["fiscal_year"] for f in filings] == [2025, 2024, 2023]
+    assert filings[0]["url"] == ("https://www.sec.gov/Archives/edgar/data/320193/"
+                                 "000032019325000123/aapl-20250927.htm")
+    assert filings[0]["form"] == "10-K"
+
+
+def test_company_facts_mapping(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"companyfacts": FACTS}))
+    facts = edgar.company_facts(conn, "0000320193")
+    by = {(f["metric"], f["fiscal_year"]): f for f in facts}
+
+    assert by[("revenue", 2025)]["value"] == 400000  # priority tag wins
+    assert by[("revenue", 2024)]["value"] == 391000  # prior year from same filing
+    assert by[("revenue", 2023)]["value"] == 383000  # fallback tag fills gap
+    assert ("revenue", 2026) not in by
+    assert by[("total_assets", 2025)]["value"] == 365000  # 10-Q point excluded
+    assert by[("eps_diluted", 2025)]["value"] == 7.1
+    ref = json.loads(by[("revenue", 2025)]["source_ref"])
+    assert ref["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert by[("revenue", 2025)]["source_kind"] == "xbrl"
