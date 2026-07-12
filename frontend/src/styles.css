@@ -1,0 +1,260 @@
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --accent-soft: #eaf2fc;
+  --series-1: #2a78d6;
+  --series-2: #1baf7a;
+  --series-4: #008300;
+  --series-5: #4a3aa7;
+  --good: #006300;
+  --bad: #d03b3b;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--page);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.primary:hover:not(:disabled) { background: #1c5cab; color: #fff; }
+
+input, select, textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* ---------- app frame: header / 75-20 body ---------- */
+
+.app {
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+}
+.topbar .brand { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+.topbar nav { display: flex; gap: 4px; }
+.topbar nav button {
+  border: none;
+  background: none;
+  color: var(--ink-2);
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+.topbar nav button.active { background: var(--accent-soft); color: var(--accent); }
+.topbar .spacer { flex: 1; }
+
+.body {
+  display: grid;
+  grid-template-columns: 75fr 25fr;
+  min-height: 0;
+}
+
+main.pane {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 28px 48px;
+  min-width: 0;
+}
+
+aside.chat {
+  border-left: 1px solid var(--grid);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---------- generic bits ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--grid);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+.scroll-x { overflow-x: auto; }
+
+table.data {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+table.data th, table.data td {
+  text-align: right;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--grid);
+}
+table.data th { color: var(--muted); font-weight: 500; font-size: 12px; }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--grid);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--surface);
+}
+
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-ready { background: var(--good); }
+.status-failed { background: var(--bad); }
+.status-working { background: var(--accent); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+.cite {
+  display: inline-block;
+  font-size: 11px;
+  padding: 0 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+.cite:hover { background: var(--accent); color: #fff; }
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.error-text { color: var(--bad); }
+
+/* ---------- modal ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 11, 11, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  max-width: 640px;
+  width: 90%;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px rgba(11, 11, 11, 0.18);
+}
+.modal h3 { margin-top: 0; }
+
+/* ---------- chat ---------- */
+
+.chat-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--grid);
+}
+.chat-head .row { display: flex; gap: 8px; align-items: center; }
+.chat-title { font-weight: 600; font-size: 13px; }
+.chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg { max-width: 92%; line-height: 1.45; font-size: 13px; }
+.msg .bubble {
+  padding: 8px 12px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.msg.user { align-self: flex-end; }
+.msg.user .bubble { background: var(--accent); color: #fff; }
+.msg.assistant .bubble { background: var(--page); border: 1px solid var(--grid); }
+.chat-input {
+  border-top: 1px solid var(--grid);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-input textarea { resize: none; min-height: 60px; }
+.chat-toggles { display: flex; gap: 12px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.chat-toggles label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+
+/* ---------- forms ---------- */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px 14px;
+  align-items: center;
+  max-width: 640px;
+}
+.form-grid label { color: var(--ink-2); font-size: 13px; }
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+h2.page-title { margin: 0 0 16px; font-size: 18px; letter-spacing: -0.01em; }
