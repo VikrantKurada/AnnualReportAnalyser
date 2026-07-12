@@ -171,8 +171,10 @@ def test_valuation_endpoint(client, monkeypatch):
 
     monkeypatch.setattr(val_mod.web, "fetch_url",
                         lambda conn_, url, ttl=None, binary=False:
-                        "Symbol,Date,Time,Open,High,Low,Close,Volume\n"
-                        "ACME.US,2026-07-10,22:00:00,49,51,48,50.0,900\n")
+                        json.dumps({"chart": {"result": [{"meta": {
+                            "regularMarketPrice": 50.0,
+                            "regularMarketTime": 1783713601,
+                            "currency": "USD"}}]}}))
     v = client.get(f"/api/companies/{cid}/valuation").json()
     assert v["available"] is True
     assert v["price"] == 50.0

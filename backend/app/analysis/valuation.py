@@ -1,29 +1,35 @@
 """Market-data valuation multiples, computed on request (never stored as facts,
-since prices move daily). Quotes come from Stooq's free CSV endpoint through the
-shared web cache; every metric keeps the formula + fact-id + price provenance.
+since prices move daily). Quotes come from Yahoo Finance's public chart API
+through the shared web cache; every metric keeps the formula + fact-id + price
+provenance.
 """
+import json
 import sqlite3
+from datetime import datetime, timezone
 
 from .. import db, web
 
-QUOTE_URL = "https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=csv"
+QUOTE_URL = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+             "{symbol}?range=1d&interval=1d")
 QUOTE_TTL = 6 * 3600
 
 
 def get_quote(conn: sqlite3.Connection, ticker: str) -> dict | None:
-    url = QUOTE_URL.format(symbol=f"{ticker.lower()}.us")
-    csv_text = web.fetch_url(conn, url, ttl=QUOTE_TTL)
-    lines = [line for line in csv_text.strip().splitlines() if line]
-    if len(lines) < 2:
+    url = QUOTE_URL.format(symbol=ticker.upper())
+    data = json.loads(web.fetch_url(conn, url, ttl=QUOTE_TTL))
+    results = (data.get("chart") or {}).get("result") or []
+    if not results:
         return None
-    header = lines[0].split(",")
-    row = lines[1].split(",")
-    fields = dict(zip(header, row))
-    try:
-        price = float(fields["Close"])
-    except (KeyError, ValueError):
+    meta = results[0].get("meta") or {}
+    price = meta.get("regularMarketPrice")
+    if price is None:
         return None
-    return {"price": price, "asof": fields.get("Date", ""), "source_url": url}
+    asof = ""
+    if meta.get("regularMarketTime"):
+        asof = datetime.fromtimestamp(meta["regularMarketTime"],
+                                      tz=timezone.utc).date().isoformat()
+    return {"price": float(price), "asof": asof,
+            "currency": meta.get("currency", ""), "source_url": url}
 
 
 def compute_valuation(conn: sqlite3.Connection, company_id: int,

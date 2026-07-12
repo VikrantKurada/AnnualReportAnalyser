@@ -115,6 +115,35 @@ def test_chat_mcp_tools_dispatch(tmp_path, monkeypatch):
     assert f"mcp_{server_id}_add" in names
 
 
+def test_chat_forces_answer_when_tool_loop_exhausts(tmp_path):
+    conn, cid, chunk_id, sid = seed(tmp_path)
+
+    class ToolLoopingLLM:
+        """Calls a tool every round; only answers when tools are withheld."""
+
+        def __init__(self):
+            self.calls = []
+
+        def chat(self, messages, tools=None, json_mode=False, context=""):
+            self.calls.append(tools)
+            if tools:
+                return ChatResult(content=None, tool_calls=[
+                    {"id": "c", "name": "search_documents",
+                     "arguments": {"query": "margin"}}])
+            return ChatResult(content=f"Forced answer [chunk:{chunk_id}].")
+
+    llm = ToolLoopingLLM()
+    out = chat.run_chat_turn(conn, sid, "why did margins rise?", "sess",
+                             llm=llm, embedder=FakeEmbedder())
+    assert out["content"] == f"Forced answer [chunk:{chunk_id}]."
+    assert out["citations"] == [{"kind": "chunk", "id": chunk_id}]
+    # 6 tool rounds + 1 forced no-tools call
+    assert llm.calls[-1] is None
+    assert len(llm.calls) == chat.MAX_TOOL_ROUNDS + 1
+    msgs = db.query(conn, "SELECT * FROM chat_messages WHERE session_id=?", (sid,))
+    assert "(no response)" not in msgs[-1]["content"]
+
+
 def test_chat_history_included(tmp_path):
     conn, cid, chunk_id, sid = seed(tmp_path)
     llm = FakeLLM([ChatResult(content="first answer")])

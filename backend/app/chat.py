@@ -70,7 +70,15 @@ def run_chat_turn(conn: sqlite3.Connection, session_id: int, user_text: str,
             messages.append({"role": "tool", "tool_call_id": tc["id"],
                              "content": output})
 
-    content = (result.content if result else None) or "(no response)"
+    content = result.content if result else None
+    if not content or not content.strip():
+        # tool loop exhausted without an answer: withhold tools to force one
+        messages.append({"role": "user", "content":
+                         "Answer the question now using the information gathered"
+                         " above. Do not request any more tools."})
+        final = llm.chat(messages, context=f"chat:{session_id}")
+        content = final.content
+    content = content or "(no response)"
     citations = _extract_citations(content)
     db.insert(conn, "chat_messages", {
         "session_id": session_id, "role": "assistant", "content": content,

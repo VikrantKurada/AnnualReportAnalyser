@@ -3,11 +3,15 @@ import pytest
 from app import db
 from app.analysis import valuation
 
-STOOQ_CSV = ("Symbol,Date,Time,Open,High,Low,Close,Volume\n"
-             "AAPL.US,2026-07-10,22:00:04,250.1,255.9,249.3,252.5,41000000\n")
+import json
 
-STOOQ_ND = ("Symbol,Date,Time,Open,High,Low,Close,Volume\n"
-            "ZZZZ.US,N/D,N/D,N/D,N/D,N/D,N/D,N/D\n")
+# 1783713601 = 2026-07-10 (UTC)
+YAHOO_JSON = json.dumps({"chart": {"result": [{"meta": {
+    "regularMarketPrice": 252.5, "regularMarketTime": 1783713601,
+    "currency": "USD"}}], "error": None}})
+
+YAHOO_EMPTY = json.dumps({"chart": {"result": None,
+                                    "error": {"code": "Not Found"}}})
 
 
 def make_conn(tmp_path):
@@ -16,20 +20,21 @@ def make_conn(tmp_path):
     return conn
 
 
-def test_get_quote_parses_stooq(tmp_path, monkeypatch):
+def test_get_quote_parses_yahoo(tmp_path, monkeypatch):
     conn = make_conn(tmp_path)
     monkeypatch.setattr(valuation.web, "fetch_url",
-                        lambda conn_, url, ttl=None, binary=False: STOOQ_CSV)
+                        lambda conn_, url, ttl=None, binary=False: YAHOO_JSON)
     q = valuation.get_quote(conn, "AAPL")
     assert q["price"] == 252.5
     assert q["asof"] == "2026-07-10"
-    assert "stooq.com" in q["source_url"]
+    assert q["currency"] == "USD"
+    assert "finance.yahoo.com" in q["source_url"]
 
 
 def test_get_quote_handles_unknown_ticker(tmp_path, monkeypatch):
     conn = make_conn(tmp_path)
     monkeypatch.setattr(valuation.web, "fetch_url",
-                        lambda conn_, url, ttl=None, binary=False: STOOQ_ND)
+                        lambda conn_, url, ttl=None, binary=False: YAHOO_EMPTY)
     assert valuation.get_quote(conn, "ZZZZ") is None
 
 
