@@ -1,0 +1,25 @@
+<html>
+<head><title>ACME 10-K</title><style>p { color: black; }</style>
+<script>console.log("noise");</script></head>
+<body>
+<ix:header><ix:hidden>hidden xbrl metadata should vanish</ix:hidden></ix:header>
+<div>
+  <p><b>Item 1. Business</b></p>
+  <p>Acme Corporation designs and sells widgets worldwide. Revenue comes from
+  <ix:nonFraction name="us-gaap:Revenues">three</ix:nonFraction> segments.</p>
+  <p>The company operates in 12 countries.</p>
+
+  <h2>Item 1A. Risk Factors</h2>
+  <p>Demand for widgets may decline due to competition.</p>
+  <p>Supply chain concentration in a single region poses risks.</p>
+
+  <p style="font-weight:bold"><b>Item 7. Management&#8217;s Discussion and Analysis</b></p>
+  <p>Revenue increased 12% year over year driven by widget pro sales.</p>
+  <table>
+    <tr><th>Metric</th><th>2025</th><th>2024</th></tr>
+    <tr><td>Revenue</td><td>1,200</td><td>1,071</td></tr>
+    <tr><td>Net income</td><td>240</td><td>200</td></tr>
+  </table>
+</div>
+</body>
+</html>
