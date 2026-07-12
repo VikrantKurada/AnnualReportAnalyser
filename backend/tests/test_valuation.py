@@ -77,6 +77,42 @@ def test_compute_valuation(tmp_path):
     assert v["fiscal_year"] == 2025
 
 
+def test_compute_valuation_currency_mismatch_blocks_multiples(tmp_path):
+    """GBP filings (ADR) + USD quote must not produce cross-currency multiples."""
+    conn = make_conn(tmp_path)
+    cid = db.insert(conn, "companies", {"name": "GSK plc", "ticker": "GSK",
+                                        "source_mode": "edgar", "status": "ready"})
+    for metric, value in [("revenue", 32667000000.0), ("eps_diluted", 1.35),
+                          ("shares_outstanding", 4100000000.0)]:
+        db.insert(conn, "facts", {"company_id": cid, "fiscal_year": 2025,
+                                  "metric": metric, "value": value,
+                                  "unit": "GBP" if metric != "shares_outstanding" else "shares",
+                                  "source_kind": "xbrl"})
+    quote = {"price": 40.0, "asof": "2026-07-10", "currency": "USD",
+             "source_url": "u"}
+    v = valuation.compute_valuation(conn, cid, quote)
+    assert v["currency_mismatch"] is True
+    assert v["filing_currency"] == "GBP"
+    assert v["metrics"] == []
+
+
+def test_compute_valuation_matching_currency_ok(tmp_path):
+    conn = make_conn(tmp_path)
+    cid = db.insert(conn, "companies", {"name": "Acme", "ticker": "ACME",
+                                        "source_mode": "edgar", "status": "ready"})
+    db.insert(conn, "facts", {"company_id": cid, "fiscal_year": 2025,
+                              "metric": "eps_diluted", "value": 2.0, "unit": "USD/shares",
+                              "source_kind": "xbrl"})
+    db.insert(conn, "facts", {"company_id": cid, "fiscal_year": 2025,
+                              "metric": "revenue", "value": 100.0, "unit": "USD",
+                              "source_kind": "xbrl"})
+    quote = {"price": 50.0, "asof": "2026-07-10", "currency": "USD",
+             "source_url": "u"}
+    v = valuation.compute_valuation(conn, cid, quote)
+    assert v.get("currency_mismatch") is False
+    assert any(m["metric"] == "pe" for m in v["metrics"])
+
+
 def test_compute_valuation_missing_facts(tmp_path):
     conn = make_conn(tmp_path)
     cid = db.insert(conn, "companies", {"name": "Bare", "ticker": "BARE",

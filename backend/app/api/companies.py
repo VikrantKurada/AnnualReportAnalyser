@@ -106,6 +106,11 @@ def company_valuation(company_id: int, conn: sqlite3.Connection = Depends(get_db
         return {"available": False,
                 "reason": f"no quote found for {company['ticker']}"}
     result = valuation.compute_valuation(conn, company_id, quote)
+    if result.get("currency_mismatch"):
+        return {"available": False, "reason": (
+            f"quote is in {result['quote_currency']} but the filings report in "
+            f"{result['filing_currency']} (ADR) — cross-currency valuation is "
+            "not supported")}
     result["available"] = True
     result["ticker"] = company["ticker"]
     return result

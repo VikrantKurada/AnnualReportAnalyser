@@ -37,19 +37,32 @@ def compute_valuation(conn: sqlite3.Connection, company_id: int,
     """Latest-fiscal-year multiples. Metrics whose inputs are missing are
     simply absent."""
     rows = db.query(conn,
-        "SELECT id, metric, fiscal_year, value FROM facts"
+        "SELECT id, metric, fiscal_year, value, unit FROM facts"
         " WHERE company_id = ? AND value IS NOT NULL ORDER BY fiscal_year DESC",
         (company_id,))
     price = quote["price"]
+    quote_currency = quote.get("currency", "")
     result = {"price": price, "asof": quote["asof"],
               "source_url": quote["source_url"], "fiscal_year": None,
-              "metrics": []}
+              "quote_currency": quote_currency, "filing_currency": "",
+              "currency_mismatch": False, "metrics": []}
     if not rows:
         return result
 
     latest = rows[0]["fiscal_year"]
     result["fiscal_year"] = latest
     facts = {r["metric"]: r for r in rows if r["fiscal_year"] == latest}
+
+    # ADR guard: a USD quote against e.g. GBP filings would make every multiple
+    # meaningless (and the ADS ratio would skew share counts on top).
+    filing_currency = next(
+        (r["unit"] for r in facts.values()
+         if r["unit"] and len(r["unit"]) == 3 and r["unit"].isalpha()), "")
+    result["filing_currency"] = filing_currency
+    if (quote_currency and filing_currency
+            and quote_currency.upper() != filing_currency.upper()):
+        result["currency_mismatch"] = True
+        return result
 
     def add(metric, value, formula, inputs):
         result["metrics"].append({"metric": metric, "value": value,

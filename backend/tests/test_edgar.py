@@ -81,6 +81,65 @@ FACTS = {"facts": {"us-gaap": {
 }}}
 
 
+# GSK-like foreign private issuer: 20-F filings, ifrs-full taxonomy, GBP.
+FPI_SUBMISSIONS = {
+    "cik": "1131399",
+    "name": "GSK plc",
+    "filings": {"recent": {
+        "form": ["6-K", "20-F", "20-F", "20-F", "20-F/A", "20-F"],
+        "accessionNumber": ["0000-25-9", "0001131399-26-000010",
+                            "0001131399-25-000010", "0001131399-24-000010",
+                            "0001131399-23-000099", "0001131399-23-000010"],
+        "primaryDocument": ["k.htm", "gsk-20251231.htm", "gsk-20241231.htm",
+                            "gsk-20231231.htm", "d495695d20fa.htm",
+                            "d382677d20f.htm"],
+        "reportDate": ["2025-06-30", "2025-12-31", "2024-12-31",
+                       "2023-12-31", "2022-12-31", "2022-12-31"],
+        "filingDate": ["2025-07-30", "2026-02-20", "2025-02-20",
+                       "2024-02-20", "2023-08-01", "2023-02-20"],
+    }},
+}
+
+FPI_FACTS = {"facts": {
+    "ifrs-full": {
+        "Revenue": {"units": {"GBP": [
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 32667000000,
+             "accn": "g1", "start": "2025-01-01", "end": "2025-12-31"},
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 31376000000,
+             "accn": "g1", "start": "2024-01-01", "end": "2024-12-31"},
+        ]}},
+        "ProfitLoss": {"units": {"GBP": [
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 6000000000,
+             "accn": "g1", "start": "2025-01-01", "end": "2025-12-31"},
+        ]}},
+        "ProfitLossAttributableToOwnersOfParent": {"units": {"GBP": [
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 5600000000,
+             "accn": "g1", "start": "2025-01-01", "end": "2025-12-31"},
+        ]}},
+        "DilutedEarningsLossPerShare": {"units": {"GBP/shares": [
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 1.35,
+             "accn": "g1", "start": "2025-01-01", "end": "2025-12-31"},
+        ]}},
+        "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities":
+            {"units": {"GBP": [
+                {"fy": 2025, "fp": "FY", "form": "20-F", "val": 1200000000,
+                 "accn": "g1", "start": "2025-01-01", "end": "2025-12-31"},
+            ]}},
+        # quarterly 6-K datapoint must be excluded
+        "Assets": {"units": {"GBP": [
+            {"fy": 2025, "fp": "FY", "form": "20-F", "val": 90000000000,
+             "accn": "g1", "end": "2025-12-31"},
+            {"fy": 2025, "fp": "Q2", "form": "6-K", "val": 1,
+             "accn": "g9", "end": "2025-06-30"},
+        ]}},
+    },
+    "dei": {"EntityCommonStockSharesOutstanding": {"units": {"shares": [
+        {"fy": 2025, "fp": "FY", "form": "20-F", "val": 4100000000,
+         "accn": "g1", "end": "2025-12-31"},
+    ]}}},
+}}
+
+
 def make_conn(tmp_path):
     conn = db.get_conn(tmp_path / "t.db")
     db.init_db(conn)
@@ -138,6 +197,43 @@ def test_company_facts_mapping(tmp_path, monkeypatch):
     ref = json.loads(by[("revenue", 2025)]["source_ref"])
     assert ref["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
     assert by[("revenue", 2025)]["source_kind"] == "xbrl"
+
+
+def test_list_annual_filings_accepts_20f(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"submissions": FPI_SUBMISSIONS}))
+    filings = edgar.list_annual_filings(conn, "0001131399", n=3)
+    assert [f["fiscal_year"] for f in filings] == [2025, 2024, 2023]
+    assert all(f["form"] == "20-F" for f in filings)
+    assert filings[0]["url"].endswith("gsk-20251231.htm")
+
+    # for FY2022 both 20-F/A and 20-F exist: the unamended one wins
+    four = edgar.list_annual_filings(conn, "0001131399", n=4)
+    fy2022 = next(f for f in four if f["fiscal_year"] == 2022)
+    assert fy2022["form"] == "20-F"
+    assert fy2022["url"].endswith("d382677d20f.htm")
+
+
+def test_company_facts_ifrs_taxonomy(tmp_path, monkeypatch):
+    conn = make_conn(tmp_path)
+    monkeypatch.setattr(edgar.web, "fetch_url", fake_fetch({"companyfacts": FPI_FACTS}))
+    facts = edgar.company_facts(conn, "0001131399")
+    by = {(f["metric"], f["fiscal_year"]): f for f in facts}
+
+    assert by[("revenue", 2025)]["value"] == 32667000000
+    assert by[("revenue", 2025)]["unit"] == "GBP"
+    assert by[("revenue", 2024)]["value"] == 31376000000  # comparative period
+    # owners-of-parent takes priority over total ProfitLoss
+    assert by[("net_income", 2025)]["value"] == 5600000000
+    assert by[("eps_diluted", 2025)]["value"] == 1.35
+    assert by[("capex", 2025)]["value"] == 1200000000
+    assert by[("total_assets", 2025)]["value"] == 90000000000  # 6-K point excluded
+    assert by[("shares_outstanding", 2025)]["value"] == 4100000000  # from dei
+
+    ref = json.loads(by[("revenue", 2025)]["source_ref"])
+    assert ref["taxonomy"] == "ifrs-full"
+    assert ref["tag"] == "Revenue"
+    assert ref["form"] == "20-F"
 
 
 def test_company_facts_analyst_metrics(tmp_path, monkeypatch):
