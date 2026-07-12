@@ -206,13 +206,23 @@ def _parse_number(cell: str) -> float | None:
 
 
 def _store_derived_ratios(conn, company_id):
-    facts = db.query(conn,
+    def store(row):
+        _upsert_fact(conn, company_id, {
+            "fiscal_year": row["fiscal_year"], "metric": row["metric"],
+            "label": metrics.RATIO_LABELS.get(row["metric"], row["metric"]),
+            "value": row["value"], "unit": row["unit"], "source_kind": "derived",
+            "source_ref": json.dumps({"formula": row["formula"],
+                                      "inputs": row["inputs"]})})
+
+    base = db.query(conn,
         "SELECT id, metric, fiscal_year, value FROM facts"
         " WHERE company_id = ? AND source_kind != 'derived'", (company_id,))
-    for ratio in metrics.compute_ratios(facts):
-        _upsert_fact(conn, company_id, {
-            "fiscal_year": ratio["fiscal_year"], "metric": ratio["metric"],
-            "label": metrics.RATIO_LABELS.get(ratio["metric"], ratio["metric"]),
-            "value": ratio["value"], "unit": "ratio", "source_kind": "derived",
-            "source_ref": json.dumps({"formula": ratio["formula"],
-                                      "inputs": ratio["inputs"]})})
+    # pass 1: currency composites (EBITDA, FCF, debt aggregates)
+    for row in metrics.compute_derived_values(base):
+        store(row)
+    # pass 2: ratios may cite the stored composites by fact id
+    everything = db.query(conn,
+        "SELECT id, metric, fiscal_year, value FROM facts WHERE company_id = ?",
+        (company_id,))
+    for row in metrics.compute_ratios(everything):
+        store(row)

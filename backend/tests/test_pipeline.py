@@ -56,6 +56,12 @@ def test_edgar_ingest_end_to_end(tmp_path, monkeypatch):
     by = {(f["metric"], f["fiscal_year"], f["source_kind"]) for f in facts}
     assert ("revenue", 2025, "xbrl") in by
     assert ("revenue_growth_yoy", 2025, "derived") in by
+    assert ("gross_profit", 2025, "xbrl") in by
+    assert ("gross_margin", 2025, "derived") in by
+    gm = next(f for f in facts if f["metric"] == "gross_margin"
+              and f["fiscal_year"] == 2025)
+    assert gm["value"] == 190000 / 400000
+    assert gm["unit"] == "ratio"
 
     # re-ingest is idempotent (no duplicate reports/facts)
     pipeline.ingest_company(conn, "AAPL", "edgar", embedder=FakeEmbedder(),
